@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs"
-import { generateToken } from "../lib/utils.js"
+import { sendTokenViaCookie } from "../lib/utils.js"
 import User from "../models/user.model.js"
 
 export const signup = async (req, res) => {
   console.log("Hit signup")
   //   getting data
-  const { fullName, email, password , username} = req.body
+  const { fullName, email, password, username } = req.body
   try {
     //ground check for all data
     if (!fullName || !email || !password || !username)
@@ -32,23 +32,39 @@ export const signup = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
-      username
+      username,
     })
 
     if (newUser) {
+      // for natvie
       // generate token
-      const token = generateToken(newUser._id)
+      // const token = generateToken(newUser._id)
 
+      // await newUser.save()
+
+      // res.status(201).json({
+      //   _id: newUser._id,
+      //   fullName: newUser.fullName,
+      //   username: newUser.username,
+      //   email: newUser.email,
+      //   profilePic: newUser.profilePic,
+      //   token, // ✅ send it to frontend
+      // })
+
+      // postman or web
+      sendTokenViaCookie(res, newUser._id)
+      
       await newUser.save()
-
+      
       res.status(201).json({
         _id: newUser._id,
         fullName: newUser.fullName,
         username: newUser.username,
         email: newUser.email,
         profilePic: newUser.profilePic,
-        token, // ✅ send it to frontend
       })
+
+
     } else {
       return res.status(400).json({ message: "Invalid user data" })
     }
@@ -71,18 +87,27 @@ export const login = async (req, res) => {
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Inavalid credentials" })
     }
+    // Native
+    // const token = generateToken(user._id)
 
-    const token = generateToken(user._id)
+    // res.status(201).json({
+    //   _id: user._id,
+    //   fullName: user.fullName,
+    //   username: user.username,
+    //   email: user.email,
+    //   profilePic: user.profilePic,
+    //   token, // ✅ send it to frontend
+    // })
 
+    //postman or web
+    sendTokenViaCookie(res, user._id)
     res.status(201).json({
       _id: user._id,
       fullName: user.fullName,
       username: user.username,
       email: user.email,
       profilePic: user.profilePic,
-      token, // ✅ send it to frontend
     })
-
   } catch (error) {
     console.log("Error at login controller", error.message)
     return res.status(500).json({ message: "Internal server error" })
@@ -91,7 +116,7 @@ export const login = async (req, res) => {
 
 export const logout = (req, res) => {
   try {
-    res.cookie("jwt", "", { maxAge: 0 })
+    res.cookie("token", "", { maxAge: 0 })
     return res.status(200).json({ message: "Logged out successfully" })
   } catch (error) {
     console.log("Error at logout controller", error.message)
@@ -132,8 +157,6 @@ export const checkAuth = (req, res) => {
     return res.status(500).json({ message: "Internal server error" })
   }
 }
-
-
 
 export const checkUsernameAvailability = async (req, res) => {
   try {
