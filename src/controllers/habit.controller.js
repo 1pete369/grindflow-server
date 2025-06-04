@@ -1,5 +1,9 @@
-import { updateGoalProgress } from "../../helpers/goal.helper.js"
-import { calculateStreaks } from "../../helpers/habit.helper.js"
+import { computeBasicHabitStats, computePremiumHabitStats } from "../analytics/habit.analytics.js"
+import {
+  updateGoalProgress
+} from "../helpers/goal.helper.js"
+import { updateGoalMetrics } from "../helpers/goalMetrics.helper.js"
+import { calculateStreaks } from "../helpers/habit.helper.js"
 import Goal from "../models/goal.model.js"
 import Habit from "../models/habit.model.js"
 
@@ -36,7 +40,10 @@ export const createHabit = async (req, res) => {
       })
 
       // ⬇️ Call progress recalculation
-      await Goal.calculateProgress(linkedGoalId)
+      if (linkedGoalId) {
+        await updateGoalProgress(linkedGoalId)
+        await updateGoalMetrics(linkedGoalId) // ← recalc missedDays, streaks, etc.
+      }
     }
 
     res.status(201).json(newHabit)
@@ -118,7 +125,10 @@ export const deleteHabit = async (req, res) => {
       })
 
       // ⬇️ Recalculate progress since one habit is gone
-      await Goal.calculateProgress(deletedHabit.linkedGoalId)
+      if (deletedHabit.linkedGoalId) {
+        await updateGoalProgress(deletedHabit.linkedGoalId)
+        await updateGoalMetrics(deletedHabit.linkedGoalId) // ← recalc missedDays, streaks, etc.
+      }
     }
 
     res.status(200).json({ message: "Habit deleted successfully" })
@@ -142,33 +152,38 @@ export const toggleHabitCompleted = async (req, res) => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone })
 
     // Check if today is already in completedDates
-    const isMarked = habit.completedDates.some(date =>
-      new Date(date).toLocaleDateString("en-CA", { timeZone }) === today
+    const isMarked = habit.completedDates.some(
+      (date) =>
+        new Date(date).toLocaleDateString("en-CA", { timeZone }) === today
     )
 
     if (isMarked) {
       // Unmark: remove today’s date
-      habit.completedDates = habit.completedDates.filter(date =>
-        new Date(date).toLocaleDateString("en-CA", { timeZone }) !== today
+      habit.completedDates = habit.completedDates.filter(
+        (date) =>
+          new Date(date).toLocaleDateString("en-CA", { timeZone }) !== today
       )
 
       // Recompute streaks now that today is removed
       const { streak, longestStreak } = calculateStreaks(
-        habit.completedDates.map(d => new Date(d).toISOString().split("T")[0]),
+        habit.completedDates.map(
+          (d) => new Date(d).toISOString().split("T")[0]
+        ),
         habit.frequency,
         habit.days
       )
       habit.streak = streak
       habit.longestStreak = longestStreak
       habit.lastCompletedAt = null
-
     } else {
       // Mark today
       habit.completedDates.push(new Date().toISOString())
 
       // Recompute streaks including today
       const { streak, longestStreak } = calculateStreaks(
-        habit.completedDates.map(d => new Date(d).toISOString().split("T")[0]),
+        habit.completedDates.map(
+          (d) => new Date(d).toISOString().split("T")[0]
+        ),
         habit.frequency,
         habit.days
       )
@@ -179,19 +194,51 @@ export const toggleHabitCompleted = async (req, res) => {
 
     await habit.save()
 
-    // If this habit is linked to a goal, recompute that goal’s progress
+    // If this habit is linked to a goal, recompute that goal’s progress and metrics
     if (habit.linkedGoalId) {
       await updateGoalProgress(habit.linkedGoalId)
+      await updateGoalMetrics(habit.linkedGoalId) // ← recalc missedDays, streaks, etc.
     }
 
     return res.status(200).json({ success: true, habit })
-
   } catch (err) {
     console.error("Toggle Habit Error:", err)
     return res.status(500).json({ error: "Something went wrong" })
   }
 }
 
-// if (habit.linkedGoalId) {
-//   await Goal.calculateProgress(habit.linkedGoalId, timeZone)
-// }
+
+export const getBasicHabitAnalytics = async (req, res) => {
+  try {
+    const userId = req.user._id
+    const stats = await computeBasicHabitStats(userId)
+    return res.status(200).json(stats)
+  } catch (err) {
+    console.error("Basic Habit Analytics Error:", err)
+    return res.status(500).json({ error: "Could not fetch habit analytics" })
+  }
+}
+
+export const getPremiumHabitAnalytics = async (req, res) => {
+  try {
+    // Deny if user is NOT premium
+    if (!req.user.isPremium) {
+      return res.status(403).json({ error: "Premium access required" })
+    }
+
+    const userId = req.user._id
+    // Read optional from/to query parameters (YYYY-MM-DD)
+    const { from, to } = req.query
+
+    // Pass them into computePremiumHabitStats if provided
+    const options = {}
+    if (from) options.fromDate = from
+    if (to) options.toDate = to
+
+    const stats = await computePremiumHabitStats(userId, options)
+    return res.status(200).json(stats)
+  } catch (err) {
+    console.error("Premium Habit Analytics Error:", err)
+    return res.status(500).json({ error: "Could not fetch premium habit analytics" })
+  }
+}

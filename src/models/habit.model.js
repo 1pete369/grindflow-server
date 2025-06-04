@@ -1,3 +1,5 @@
+// src/models/habit.model.js
+
 import mongoose from "mongoose"
 
 const habitSchema = new mongoose.Schema(
@@ -44,7 +46,7 @@ const habitSchema = new mongoose.Schema(
     },
     lastCompletedAt: {
       type: Date,
-      default: null, // ✅ for time-based insights
+      default: null, // for time-based insights
     },
     linkedGoalId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -66,6 +68,17 @@ const habitSchema = new mongoose.Schema(
   },
   { timestamps: true }
 )
+
+// INDEXES
+// Quickly find all habits belonging to a particular user:
+habitSchema.index({ userId: 1 })
+
+// Quickly find all habits linked to a given goal:
+habitSchema.index({ linkedGoalId: 1 })
+
+// (Optional) Speed up queries that look for a date inside the completedDates array:
+// e.g. Habit.find({ completedDates: { $elemMatch: { $gte: someDate, $lt: anotherDate } } })
+habitSchema.index({ completedDates: 1 })
 
 const Habit = mongoose.model("Habit", habitSchema)
 export default Habit

@@ -1,5 +1,5 @@
+import { computeBasicGoalStats, computePremiumGoalStats } from "../analytics/goal.analytics.js"
 import Goal from "../models/goal.model.js"
-import Habit from "../models/habit.model.js"
 
 // ✅ Create a new goal
 export const createGoal = async (req, res) => {
@@ -98,14 +98,30 @@ export const deleteGoal = async (req, res) => {
   }
 }
 
-// export const getGoalAnalytics = async (req, res) => {
-//   try {
-//     const goal = await Goal.findOne({ _id: req.params.id, userId: req.user._id }).populate("linkedHabits")
-//     if (!goal) return res.status(404).json({ error: "Goal not found" })
 
-//     const insights = await calculateGoalInsights(goal)
-//     res.status(200).json(insights)
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to calculate goal analytics", details: err.message })
-//   }
-// }
+/** Basic analytics for all users. **/
+export const getBasicGoalAnalytics = async (req, res) => {
+  try {
+    const stats = await computeBasicGoalStats(req.user._id)
+    return res.status(200).json(stats)
+  } catch (err) {
+    console.error("Basic Goal Analytics Error:", err)
+    return res.status(500).json({ error: "Could not fetch goal analytics" })
+  }
+}
+
+/** Premium analytics for users with isPremium=true. **/
+export const getPremiumGoalAnalytics = async (req, res) => {
+  try {
+    if (req.user.isPremium) {
+      return res.status(403).json({ error: "Premium access required" })
+    }
+    const stats = await computePremiumGoalStats(req.user._id)
+    return res.status(200).json(stats)
+  } catch (err) {
+    console.error("Premium Goal Analytics Error:", err)
+    return res
+      .status(500)
+      .json({ error: "Could not fetch premium goal analytics" })
+  }
+}

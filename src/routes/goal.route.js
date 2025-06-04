@@ -3,8 +3,10 @@ import {
   createGoal,
   deleteGoal,
   getAllGoals,
+  getBasicGoalAnalytics,
   getGoalById,
-  updateGoal
+  getPremiumGoalAnalytics,
+  updateGoal,
 } from "../controllers/goal.controller.js"
 import { protectRoute } from "../middleware/auth.middleware.js"
 
@@ -14,10 +16,13 @@ router.use(protectRoute) // all goal routes are protected
 
 router.post("/", createGoal)
 router.get("/", getAllGoals)
+
+// ➜ Analytics routes must come *before* “/:id” 
+router.get("/analytics/basic", getBasicGoalAnalytics)
+router.get("/analytics/premium", getPremiumGoalAnalytics)
+
 router.get("/:id", getGoalById)
 router.patch("/:id", updateGoal)
 router.delete("/:id", deleteGoal)
-// router.get("/:id/analytics", getGoalAnalytics)
-
 
 export default router
