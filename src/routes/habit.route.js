@@ -6,6 +6,7 @@ import {
   updateHabit,
   deleteHabit,
   toggleHabitCompleted,
+  recordHabitSlip,
   getBasicHabitAnalytics,
   getPremiumHabitAnalytics,
 } from "../controllers/habit.controller.js"
@@ -26,6 +27,7 @@ router.get("/:id", getHabitById)
 router.patch("/:id", updateHabit)
 router.delete("/:id", deleteHabit)
 router.patch("/:id/complete", toggleHabitCompleted)
+router.patch("/:id/slip", recordHabitSlip)
 
 
 export default router

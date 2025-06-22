@@ -16,6 +16,8 @@ export const createHabit = async (req, res) => {
       frequency,
       days = [],
       startDate,
+      type = "build",
+      slipDates = [],
       icon,
       category,
       linkedGoalId = null,
@@ -28,6 +30,8 @@ export const createHabit = async (req, res) => {
       frequency,
       days,
       startDate,
+      type,
+      slipDates,
       icon,
       category,
       linkedGoalId,
@@ -92,6 +96,8 @@ export const updateHabit = async (req, res) => {
     const updates = { ...req.body }
     delete updates.userId
 
+    if (updates.type === undefined) delete updates.type
+
     const updatedHabit = await Habit.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       updates,
@@ -139,6 +145,48 @@ export const deleteHabit = async (req, res) => {
   }
 }
 
+// Record a slip for a quit habit
+export const recordHabitSlip = async (req, res) => {
+  try {
+    const { id } = req.params
+    const userId = req.user._id
+
+    const habit = await Habit.findOne({ _id: id, userId })
+    if (!habit) return res.status(404).json({ error: "Habit not found" })
+
+    if (habit.type !== "quit") {
+      return res.status(400).json({ error: "Slips only valid for quit habits" })
+    }
+
+    const today = new Date().toISOString()
+
+    const already = habit.slipDates.some(
+      (d) => new Date(d).toDateString() === new Date().toDateString()
+    )
+    if (!already) {
+      habit.slipDates.push(today)
+    }
+
+    // Reset streak and update longest if needed
+    if (habit.streak > habit.longestStreak) {
+      habit.longestStreak = habit.streak
+    }
+    habit.streak = 0
+
+    await habit.save()
+
+    if (habit.linkedGoalId) {
+      await updateGoalProgress(habit.linkedGoalId)
+      await updateGoalMetrics(habit.linkedGoalId)
+    }
+
+    return res.status(200).json({ success: true, habit })
+  } catch (err) {
+    console.error("Record Slip Error:", err)
+    return res.status(500).json({ error: "Something went wrong" })
+  }
+}
+
 export const toggleHabitCompleted = async (req, res) => {
   try {
     const { id } = req.params
@@ -147,6 +195,9 @@ export const toggleHabitCompleted = async (req, res) => {
 
     const habit = await Habit.findOne({ _id: id, userId })
     if (!habit) return res.status(404).json({ error: "Habit not found" })
+    if (habit.type === "quit") {
+      return res.status(400).json({ error: "Use /:id/slip to record slip for quit habits" })
+    }
 
     // “YYYY-MM-DD” string for today in Asia/Kolkata
     const today = new Date().toLocaleDateString("en-CA", { timeZone })

@@ -59,37 +59,37 @@ const buildRequiredDates = (habit, windowEnd) => {
  *   - frequencyDist
  */
 export const computeBasicHabitStats = async (userId) => {
-  // 1) Count total / active / archived
-  const totalHabits = await Habit.countDocuments({ userId })
-  const activeHabits = await Habit.countDocuments({ userId, isArchived: false })
+  const habits = await Habit.find({ userId })
+
+  const totalHabits = habits.length
+  const activeHabits = habits.filter(h => !h.isArchived).length
   const archivedHabits = totalHabits - activeHabits
 
-  // 2) Sum up completedDates lengths
-  const totalCompletedAgg = await Habit.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-    { $project: { numCompleted: { $size: "$completedDates" } } },
-    { $group: { _id: null, totalCompleted: { $sum: "$numCompleted" } } }
-  ])
-  const totalCompleted = totalCompletedAgg[0]?.totalCompleted || 0
+  const totalCompleted = habits.reduce(
+    (sum, h) =>
+      sum + (h.type === "quit" ? h.slipDates.length : h.completedDates.length),
+    0
+  )
 
-  // 3) Average streak across all habits
-  const avgStreakAgg = await Habit.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-    { $group: { _id: null, avgStreak: { $avg: "$streak" } } }
-  ])
-  const avgStreak = avgStreakAgg[0]?.avgStreak || 0
+  const avgStreak =
+    habits.length > 0
+      ? habits.reduce((s, h) => s + h.streak, 0) / habits.length
+      : 0
 
-  // 4) Category distribution
-  const categoryDist = await Habit.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-    { $group: { _id: "$category", count: { $sum: 1 } } }
-  ])
-
-  // 5) Frequency distribution
-  const frequencyDist = await Habit.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-    { $group: { _id: "$frequency", count: { $sum: 1 } } }
-  ])
+  const categoryMap = {}
+  const freqMap = {}
+  habits.forEach(h => {
+    categoryMap[h.category] = (categoryMap[h.category] || 0) + 1
+    freqMap[h.frequency] = (freqMap[h.frequency] || 0) + 1
+  })
+  const categoryDist = Object.entries(categoryMap).map(([k, v]) => ({
+    _id: k,
+    count: v
+  }))
+  const frequencyDist = Object.entries(freqMap).map(([k, v]) => ({
+    _id: k,
+    count: v
+  }))
 
   return {
     totalHabits,
@@ -157,10 +157,8 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
   let totalExpectedAll = 0
 
   allHabits.forEach(h => {
-    // Count all completedDates up to toDate (we treat any timestamp on toDate as valid)
-    const doneCount = (h.completedDates || []).filter(d =>
-      dayjs(d).format("YYYY-MM-DD") <= toDate
-    ).length
+    const arr = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    const doneCount = arr.filter(d => dayjs(d).format("YYYY-MM-DD") <= toDate).length
 
     totalDoneAll += doneCount
     totalExpectedAll += calculateExpectedCompletions(h, toDate)
@@ -180,9 +178,9 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
 
     const requiredCount = requiredDates.length
 
-    // Convert completedDates to YYYY-MM-DD, filtering only up to toDate
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
     const doneSet = new Set(
-      (h.completedDates || [])
+      source
         .map(d => dayjs(d).format("YYYY-MM-DD"))
         .filter(dd => dd >= fromDate && dd <= toDate)
     )
@@ -217,7 +215,8 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
     }
     categoryDetailedMap[cat].totalHabits += 1
 
-    const doneCount = (h.completedDates || []).filter(d =>
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    const doneCount = source.filter(d =>
       dayjs(d).format("YYYY-MM-DD") <= toDate
     ).length
     const expectedCount = calculateExpectedCompletions(h, toDate)
@@ -247,7 +246,8 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
     }
     freqDetailedMap[freq].totalHabits += 1
 
-    const doneCount = (h.completedDates || []).filter(d =>
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    const doneCount = source.filter(d =>
       dayjs(d).format("YYYY-MM-DD") <= toDate
     ).length
     const expectedCount = calculateExpectedCompletions(h, toDate)
@@ -276,9 +276,10 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
     dailyTrendMap[cursorDate.format("YYYY-MM-DD")] = 0
     cursorDate = cursorDate.add(1, "day")
   }
-  // Increment for each habit’s completedDates
+  // Increment for each habit’s completedDates or slipDates
   allHabits.forEach(h => {
-    (h.completedDates || []).forEach(d => {
+    const arr = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    arr.forEach(d => {
       const ds = dayjs(d).format("YYYY-MM-DD")
       if (ds >= fromDate && ds <= toDate) {
         dailyTrendMap[ds]++
@@ -291,7 +292,8 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
 
   // 10) Per-Habit Streak Timeline: list array of { date, streak } for each habit
   const perHabitStreakTimeline = allHabits.map(h => {
-    const doneDates = (h.completedDates || [])
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    const doneDates = source
       .map(d => dayjs(d).format("YYYY-MM-DD"))
       .filter(ds => ds >= fromDate && ds <= toDate)
       .sort((a, b) => dayjs(a).unix() - dayjs(b).unix())
@@ -322,8 +324,9 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
     const requiredDates = buildRequiredDates(h, toDate)
       .filter(ds => ds >= fromDate && ds <= toDate)
 
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
     const doneSet = new Set(
-      (h.completedDates || [])
+      source
         .map(d => dayjs(d).format("YYYY-MM-DD"))
         .filter(ds => ds >= fromDate && ds <= toDate)
     )
@@ -348,7 +351,8 @@ export const computePremiumHabitStats = async (userId, options = {}) => {
       }
     }
 
-    const doneDates = (h.completedDates || [])
+    const source = h.type === "quit" ? h.slipDates || [] : h.completedDates || []
+    const doneDates = source
       .map(d => dayjs(d).format("YYYY-MM-DD"))
       .filter(ds => ds >= fromDate && ds <= toDate)
       .sort((a, b) => dayjs(a).unix() - dayjs(b).unix())

@@ -32,7 +32,16 @@ const habitSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["build", "quit"],
+      default: "build",
+    },
     completedDates: {
+      type: [Date],
+      default: [],
+    },
+    slipDates: {
       type: [Date],
       default: [],
     },
