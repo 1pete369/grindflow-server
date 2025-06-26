@@ -18,7 +18,7 @@ const server = http.createServer(app)
 // Initialize Socket.IO on that server
 const io = new SocketIOServer(server, {
   cors: {
-    origin: "http://192.168.175.249:8081", // same as in index.js
+    origin: "http://192.168.29.67:8081", // same as in index.js
     methods: ["GET", "POST"],
     credentials: true,
   },

@@ -1,51 +1,52 @@
 import bcrypt from "bcryptjs"
-import { sendTokenViaCookie } from "../lib/utils.js"
+// import { sendTokenViaCookie } from "../lib/utils.js"
 import User from "../models/user.model.js"
-import crypto from "crypto";
+import crypto from "crypto"
+import { generateToken } from "../lib/utils.js"
 
 /**
  * Helper: generate a random alphanumeric referral code (8 chars)
  */
 const generateReferralCode = () => {
-  return crypto.randomBytes(4).toString("hex"); // e.g. "9f4b6c2a"
-};
+  return crypto.randomBytes(4).toString("hex") // e.g. "9f4b6c2a"
+}
 
 export const signup = async (req, res) => {
-  console.log("Hit signup");
-  const { fullName, email, password, username, referralCode } = req.body;
+  console.log("Hit signup")
+  const { fullName, email, password, username, referralCode } = req.body
 
   try {
     // 1. Basic field check
     if (!fullName || !email || !password || !username) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "All fields are required" })
     }
 
     // 2. Password length check
     if (password.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+        .json({ message: "Password must be at least 6 characters" })
     }
 
     // 3. Email/username uniqueness
-    const existingEmail = await User.findOne({ email });
+    const existingEmail = await User.findOne({ email })
     if (existingEmail) {
-      return res.status(400).json({ message: "Email already in use" });
+      return res.status(400).json({ message: "Email already in use" })
     }
-    const existingUsername = await User.findOne({ username });
+    const existingUsername = await User.findOne({ username })
     if (existingUsername) {
-      return res.status(400).json({ message: "Username already taken" });
+      return res.status(400).json({ message: "Username already taken" })
     }
 
     // 4. Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const salt = await bcrypt.genSalt(10)
+    const hashedPassword = await bcrypt.hash(password, salt)
 
     // 5. Generate a unique referral code for this new user
-    let newReferralCode = generateReferralCode();
+    let newReferralCode = generateReferralCode()
     // Ensure uniqueness in DB (unlikely collision but guard)
     while (await User.findOne({ referralCode: newReferralCode })) {
-      newReferralCode = generateReferralCode();
+      newReferralCode = generateReferralCode()
     }
 
     // 6. Build newUser object
@@ -55,25 +56,39 @@ export const signup = async (req, res) => {
       username,
       password: hashedPassword,
       referralCode: newReferralCode,
-    });
+    })
 
     // 7. If an incoming referralCode was provided, link them
     if (referralCode) {
-      const referrer = await User.findOne({ referralCode: referralCode.trim() });
+      const referrer = await User.findOne({ referralCode: referralCode.trim() })
       if (referrer) {
-        newUser.referredBy = referrer._id;
-        referrer.referralCount += 1;
-        await referrer.save();
+        newUser.referredBy = referrer._id
+        referrer.referralCount += 1
+        await referrer.save()
       }
       // If invalid code, ignore silently (or optionally send warning)
     }
 
     // 8. Save new user
-    await newUser.save();
+    await newUser.save()
 
     // 9. Send JWT in cookie and user info
-    sendTokenViaCookie(res, newUser._id);
-    res.status(201).json({
+    // sendTokenViaCookie(res, newUser._id);
+    // res.status(201).json({
+    //   _id: newUser._id,
+    //   fullName: newUser.fullName,
+    //   username: newUser.username,
+    //   email: newUser.email,
+    //   profilePic: newUser.profilePic,
+    //   referralCode: newUser.referralCode,
+    //   referralCount: newUser.referralCount,
+    // });
+
+    // create the JWT
+    const token = generateToken(newUser._id)
+
+    // return user info + token (no cookies)
+    return res.status(201).json({
       _id: newUser._id,
       fullName: newUser.fullName,
       username: newUser.username,
@@ -81,30 +96,43 @@ export const signup = async (req, res) => {
       profilePic: newUser.profilePic,
       referralCode: newUser.referralCode,
       referralCount: newUser.referralCount,
-    });
+      token, // <-- client will store this
+    })
   } catch (error) {
-    console.log("Error in signup controller", error.message);
-    return res.status(500).json({ message: "Internal server error" });
+    console.log("Error in signup controller", error.message)
+    return res.status(500).json({ message: "Internal server error" })
   }
-};
+}
 
 export const login = async (req, res) => {
-  console.log("Hit login");
-  const { email, password } = req.body;
+  console.log("Hit login")
+  const { email, password } = req.body
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email })
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials" })
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordCorrect = await bcrypt.compare(password, user.password)
     if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials" })
     }
 
     // Send JWT in cookie and user info
-    sendTokenViaCookie(res, user._id);
-    res.status(201).json({
+    // sendTokenViaCookie(res, user._id);
+    // res.status(201).json({
+    //   _id: user._id,
+    //   fullName: user.fullName,
+    //   username: user.username,
+    //   email: user.email,
+    //   profilePic: user.profilePic,
+    //   referralCode: user.referralCode,
+    //   referralCount: user.referralCount,
+    // });
+
+    const token = generateToken(user._id)
+
+    return res.status(200).json({
       _id: user._id,
       fullName: user.fullName,
       username: user.username,
@@ -112,13 +140,14 @@ export const login = async (req, res) => {
       profilePic: user.profilePic,
       referralCode: user.referralCode,
       referralCount: user.referralCount,
-    });
+      token, // <-- client will store this
+    })
+    
   } catch (error) {
-    console.log("Error at login controller", error.message);
-    return res.status(500).json({ message: "Internal server error" });
+    console.log("Error at login controller", error.message)
+    return res.status(500).json({ message: "Internal server error" })
   }
-};
-
+}
 
 export const logout = (req, res) => {
   try {
@@ -142,7 +171,7 @@ export const updateProfile = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
-        profilePic: media
+        profilePic: media,
       },
       { new: true }
     )

@@ -15,29 +15,28 @@ import User from "../models/user.model.js"
  */
 export const protectRoute = async (req, res, next) => {
   try {
-    // 1. Try to read token from HTTP-only cookie
+    // 1️⃣ Declare token first
     let token = req.cookies?.token;
 
-    // React Native: Bearer token support (if you prefer sending token in header instead of cookies)
-    // Uncomment these lines if you want to accept “Authorization: Bearer <token>” in addition to cookies:
-    //
-    // if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    //   token = req.headers.authorization.split(' ')[1];
-    // }
+    // 2️⃣ Fallback to Bearer token if not in cookies
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1]; // extract the token
+    }
 
     if (!token) {
       return res.status(401).json({ message: 'Unauthorized – No token provided' });
     }
 
-    // 2. Verify JWT
+    // 3️⃣ Verify JWT
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Assuming you stored userId in the token payload as { userId: '...' }
+
+    // 4️⃣ Fetch user
     const user = await User.findById(decoded.userId).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // 3. Attach user to request and proceed
+    // 5️⃣ Attach and proceed
     req.user = user;
     next();
   } catch (error) {
@@ -45,6 +44,7 @@ export const protectRoute = async (req, res, next) => {
     return res.status(401).json({ message: 'Unauthorized – Invalid or expired token' });
   }
 };
+
 
 /**
  * Middleware: authenticateSocket
@@ -54,6 +54,8 @@ export const protectRoute = async (req, res, next) => {
  * Verifies the token, retrieves the user, and attaches it to socket.user.
  * If invalid or missing, rejects the connection.
  */
+
+
 export const authenticateSocket = async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
