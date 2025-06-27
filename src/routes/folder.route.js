@@ -1,5 +1,8 @@
-// routes/folder.route.js
+// src/routes/folder.route.js
 import express from "express"
+import { protectRoute } from "../middleware/auth.middleware.js"
+import { checkQuota } from "../middleware/quota.middleware.js"
+import Folder from "../models/folder.model.js"
 import {
   createFolder,
   getAllFolders,
@@ -7,26 +10,25 @@ import {
   updateFolder,
   deleteFolder,
 } from "../controllers/folder.controller.js"
-import { protectRoute } from "../middleware/auth.middleware.js"
 
 const router = express.Router()
 
-// 🔐 all folder ops require auth
+// 🔐 Protect all folder routes
 router.use(protectRoute)
 
-// POST   /api/folders       → create a new folder
-router.post("/", createFolder)
+// 🛑 Enforce per-plan folder limits on creation
+router.post("/", checkQuota("folders", Folder), createFolder)
 
-// GET    /api/folders       → list all folders for this user
+// 📂 List all folders for current user
 router.get("/", getAllFolders)
 
-// GET    /api/folders/:id   → get one folder
+// 📂 Get one folder by ID
 router.get("/:id", getFolderById)
 
-// PATCH  /api/folders/:id   → rename or recolor
+// ✏️ Rename or recolor a folder
 router.patch("/:id", updateFolder)
 
-// DELETE /api/folders/:id   → delete folder (and unassign its tasks)
+// 🗑️ Delete a folder (and unassign its tasks)
 router.delete("/:id", deleteFolder)
 
 export default router
