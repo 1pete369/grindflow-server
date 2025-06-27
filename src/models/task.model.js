@@ -57,6 +57,11 @@ const taskSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    folderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Folder",
+      default: null,
+    },
   },
   { timestamps: true }
 )

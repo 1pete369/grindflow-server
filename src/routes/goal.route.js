@@ -1,3 +1,4 @@
+// src/routes/goal.routes.js
 import express from "express"
 import {
   createGoal,
@@ -10,14 +11,24 @@ import {
 } from "../controllers/goal.controller.js"
 import { protectRoute } from "../middleware/auth.middleware.js"
 
+// ← import quota middleware and the Goal model
+import { checkQuota } from "../middleware/quota.middleware.js"
+import Goal from "../models/goal.model.js"
+
 const router = express.Router()
 
-router.use(protectRoute) // all goal routes are protected
+router.use(protectRoute)
 
-router.post("/", createGoal)
+// enforce per-plan goal limits on creation
+router.post(
+  "/",
+  checkQuota("goals", Goal),
+  createGoal
+)
+
 router.get("/", getAllGoals)
 
-// ➜ Analytics routes must come *before* “/:id” 
+// analytics (before :id)
 router.get("/analytics/basic", getBasicGoalAnalytics)
 router.get("/analytics/premium", getPremiumGoalAnalytics)
 

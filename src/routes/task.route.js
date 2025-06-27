@@ -8,17 +8,26 @@ import {
   toggleTaskCompletion,
   getTaskAnalytics,
 } from "../controllers/task.controller.js"
-
 import { protectRoute } from "../middleware/auth.middleware.js"
+
+// ← import your quota-checking middleware and the Task model
+import { checkQuota } from "../middleware/quota.middleware.js"
+import Task from "../models/task.model.js"
 
 const router = express.Router()
 
-// 🔐 Apply protectRoute to all routes
+// 🔐 Protect all routes
 router.use(protectRoute)
 
-router.post("/", createTask)
+// 🛑 Enforce per-plan task limits on creation
+router.post(
+  "/",
+  checkQuota("tasks", Task),
+  createTask
+)
+
 router.get("/", getAllTasks)
-router.get("/analytics", getTaskAnalytics) // put this BEFORE /:id
+router.get("/analytics", getTaskAnalytics) // before /:id
 router.get("/:id", getTaskById)
 router.patch("/:id", updateTask)
 router.delete("/:id", deleteTask)

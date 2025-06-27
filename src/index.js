@@ -18,6 +18,8 @@ import challengeRoutes from "./routes/challenge.route.js"
 import searchRoutes from "./routes/search.route.js"
 import snapshotRoutes from "./routes/snapshot.route.js"
 import calendarRoutes from "./routes/calendar.route.js"
+import folderRouter from "./routes/folder.route.js"
+
 
 dotenv.config()
 
@@ -55,5 +57,7 @@ app.use("/api/challenges", challengeRoutes)
 app.use("/api/search", searchRoutes)
 app.use("/api/snapshot", snapshotRoutes)
 app.use("/api/calendar",calendarRoutes)
+app.use("/api/folders", folderRouter)
+
 
 export default app
