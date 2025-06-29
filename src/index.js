@@ -57,7 +57,7 @@ app.use("/api/challenges", challengeRoutes)
 app.use("/api/search", searchRoutes)
 app.use("/api/snapshot", snapshotRoutes)
 app.use("/api/calendar",calendarRoutes)
-app.use("/api/folders", folderRouter)
+app.use("/api/folder", folderRouter)
 
 
 export default app

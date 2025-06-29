@@ -1,9 +1,15 @@
-import { getBasicTaskAnalytics, getPremiumTaskAnalytics } from "../analytics/task.analytics.js"
+
+// controllers/task.controller.js
+import {
+  getBasicTaskAnalytics,
+  getPremiumTaskAnalytics,
+} from "../analytics/task.analytics.js"
 import Task from "../models/task.model.js"
 
 // 1. Create a new task
 export const createTask = async (req, res) => {
   try {
+    // req.body should include scheduledDate (ISO string)
     const task = new Task({ ...req.body, userId: req.user._id })
     const saved = await task.save()
     res.status(201).json(saved)
@@ -12,12 +18,20 @@ export const createTask = async (req, res) => {
   }
 }
 
-// 2. Get all tasks for a user
+// 2. Get all tasks (optionally filtered by ?date=YYYY-MM-DD)
 export const getAllTasks = async (req, res) => {
   try {
-    const tasks = await Task.find({ userId: req.user._id }).sort({
-      startTime: 1,
-    })
+    const { date } = req.query
+    const filter = { userId: req.user._id }
+    if (date) {
+      const start = new Date(date)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(date)
+      end.setHours(23, 59, 59, 999)
+      filter.scheduledDate = { $gte: start, $lt: end }
+    }
+
+    const tasks = await Task.find(filter).sort({ startTime: 1 })
     res.json(tasks)
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch tasks" })
@@ -38,7 +52,7 @@ export const getTaskById = async (req, res) => {
   }
 }
 
-// 4. Update a task
+// 4. Update a task (including scheduledDate)
 export const updateTask = async (req, res) => {
   try {
     const updated = await Task.findOneAndUpdate(
@@ -47,13 +61,10 @@ export const updateTask = async (req, res) => {
       { new: true }
     )
 
-    if (!updated) {
-      return res.status(404).json({ error: "Task not found" })
-    }
-
+    if (!updated) return res.status(404).json({ error: "Task not found" })
     res.json(updated)
   } catch (err) {
-    console.log("Error updating task:", err.message)
+    console.error("Error updating task:", err.message)
     res.status(500).json({ error: "Failed to update task" })
   }
 }
@@ -72,24 +83,7 @@ export const deleteTask = async (req, res) => {
   }
 }
 
-// 6. Toggle completion status
-// Basic toggle of isCompleted
-// export const toggleTaskCompletion = async (req, res) => {
-//   try {
-//     const task = await Task.findOne({
-//       _id: req.params.id,
-//       userId: req.user._id,
-//     })
-//     if (!task) return res.status(404).json({ error: "Task not found" })
-
-//     task.isCompleted = !task.isCompleted
-//     await task.save()
-//     res.json(task)
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to toggle task completion" })
-//   }
-// }
-
+// 6. Toggle completion (adds/removes today’s ISO date)
 export const toggleTaskCompletion = async (req, res) => {
   try {
     const task = await Task.findOne({
@@ -99,20 +93,16 @@ export const toggleTaskCompletion = async (req, res) => {
     if (!task) return res.status(404).json({ error: "Task not found" })
 
     const todayISO = new Date().toISOString().slice(0, 10)
+    const doneToday = task.completedDates.includes(todayISO)
 
-    const alreadyCompletedToday = task.completedDates.includes(todayISO)
-
-    if (alreadyCompletedToday) {
-      // Unmark completion
-      task.completedDates = task.completedDates.filter((d) => d !== todayISO)
+    if (doneToday) {
+      task.completedDates = task.completedDates.filter(d => d !== todayISO)
     } else {
-      // Mark completion
       task.completedDates.push(todayISO)
     }
 
-    // Optionally update global isCompleted (for non-recurring tasks)
     if (task.recurring === "none") {
-      task.isCompleted = !alreadyCompletedToday
+      task.isCompleted = !doneToday
     }
 
     await task.save()
@@ -122,31 +112,20 @@ export const toggleTaskCompletion = async (req, res) => {
   }
 }
 
-/**
- * GET /api/tasks/analytics
- * - Responds with "basic" analytics for all users.
- * - If userPlan !== "free", merges premium analytics on top of basic.
- */
+// 7. Analytics endpoint
 export const getTaskAnalytics = async (req, res) => {
   const userId = req.user._id
   const userPlan = req.user.plan || "premium"
-
   try {
     const tasks = await Task.find({ userId })
-
-    // 1) Compute basic analytics (always available)
     const basic = getBasicTaskAnalytics(tasks)
-
-    // 2) If userPlan is "free", just return basic.
     if (userPlan === "free") {
       return res.status(200).json(basic)
     }
-
-    // 3) Otherwise (premium or any non-free tier), merge in premium fields.
     const premium = getPremiumTaskAnalytics(tasks)
     return res.status(200).json({ ...basic, ...premium })
   } catch (err) {
-    console.error("❌ Analytics Error:", err)
+    console.error("Analytics Error:", err)
     res.status(500).json({ message: "Failed to load task analytics" })
   }
 }

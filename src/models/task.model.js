@@ -1,3 +1,4 @@
+// models/task.model.js
 import mongoose from "mongoose"
 
 const taskSchema = new mongoose.Schema(
@@ -61,6 +62,12 @@ const taskSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Folder",
       default: null,
+    },
+    // --- NEW: the scheduled date for the task ---
+    scheduledDate: {
+      type: Date,
+      required: true,
+      default: () => new Date(),
     },
   },
   { timestamps: true }

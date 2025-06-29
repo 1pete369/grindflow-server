@@ -4,6 +4,7 @@ import Task from "../models/task.model.js"
 
 // 1. Create
 export const createFolder = async (req, res) => {
+  console.log("Came to create folder")
   try {
     const folder = await Folder.create({
       name: req.body.name,
@@ -23,6 +24,7 @@ export const getAllFolders = async (req, res) => {
     const folders = await Folder.find({ userId: req.user._id }).sort(
       "createdAt"
     )
+    console.log("Folders", folders)
     res.json(folders)
   } catch (err) {
     console.error("❌ getAllFolders:", err)
