@@ -20,7 +20,6 @@ import snapshotRoutes from "./routes/snapshot.route.js"
 import calendarRoutes from "./routes/calendar.route.js"
 import folderRouter from "./routes/folder.route.js"
 
-
 dotenv.config()
 
 const app = express()
@@ -29,11 +28,13 @@ const app = express()
 app.use(express.json({ limit: "10mb" }))
 app.use(cookieParser())
 
-// CORS (for your React Native/Expo client)
+// CORS (for your Next.js frontend)
 app.use(
   cors({
-    origin: "http://192.168.175.249:8081", // adjust as needed
+    origin: "http://localhost:3000", // Your Next.js frontend
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 )
 
@@ -56,8 +57,7 @@ app.use("/api/referrals", referralRoutes)
 app.use("/api/challenges", challengeRoutes)
 app.use("/api/search", searchRoutes)
 app.use("/api/snapshot", snapshotRoutes)
-app.use("/api/calendar",calendarRoutes)
+app.use("/api/calendar", calendarRoutes)
 app.use("/api/folder", folderRouter)
-
 
 export default app

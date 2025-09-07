@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs"
-// import { sendTokenViaCookie } from "../lib/utils.js"
+import { sendTokenViaCookie } from "../lib/utils.js"
 import User from "../models/user.model.js"
 import crypto from "crypto"
 import { generateToken } from "../lib/utils.js"
@@ -18,6 +18,7 @@ export const signup = async (req, res) => {
   try {
     // 1. Basic field check
     if (!fullName || !email || !password || !username) {
+      // if (!fullName || !email || !password || !username) {
       return res.status(400).json({ message: "All fields are required" })
     }
 
@@ -73,21 +74,9 @@ export const signup = async (req, res) => {
     await newUser.save()
 
     // 9. Send JWT in cookie and user info
-    // sendTokenViaCookie(res, newUser._id);
-    // res.status(201).json({
-    //   _id: newUser._id,
-    //   fullName: newUser.fullName,
-    //   username: newUser.username,
-    //   email: newUser.email,
-    //   profilePic: newUser.profilePic,
-    //   referralCode: newUser.referralCode,
-    //   referralCount: newUser.referralCount,
-    // });
-
-    // create the JWT
-    const token = generateToken(newUser._id)
-
-    // return user info + token (no cookies)
+    sendTokenViaCookie(res, newUser._id);
+    
+    // return user info (no token since it's in cookie)
     return res.status(201).json({
       _id: newUser._id,
       fullName: newUser.fullName,
@@ -96,7 +85,6 @@ export const signup = async (req, res) => {
       profilePic: newUser.profilePic,
       referralCode: newUser.referralCode,
       referralCount: newUser.referralCount,
-      token, // <-- client will store this
     })
   } catch (error) {
     console.log("Error in signup controller", error.message)
@@ -119,19 +107,9 @@ export const login = async (req, res) => {
     }
 
     // Send JWT in cookie and user info
-    // sendTokenViaCookie(res, user._id);
-    // res.status(201).json({
-    //   _id: user._id,
-    //   fullName: user.fullName,
-    //   username: user.username,
-    //   email: user.email,
-    //   profilePic: user.profilePic,
-    //   referralCode: user.referralCode,
-    //   referralCount: user.referralCount,
-    // });
-
-    const token = generateToken(user._id)
-
+    sendTokenViaCookie(res, user._id);
+    
+    // return user info (no token since it's in cookie)
     return res.status(200).json({
       _id: user._id,
       fullName: user.fullName,
@@ -140,7 +118,6 @@ export const login = async (req, res) => {
       profilePic: user.profilePic,
       referralCode: user.referralCode,
       referralCount: user.referralCount,
-      token, // <-- client will store this
     })
     
   } catch (error) {
