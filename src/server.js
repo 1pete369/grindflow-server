@@ -33,9 +33,45 @@ connectDB()
   .then(() => {
     server.listen(PORT, () => {
       console.log("Server started on port", PORT)
+
+      // Start background self-ping to mitigate free tier cold starts
+      startSelfPing()
     })
   })
   .catch((err) => {
     console.error("Failed to connect to MongoDB:", err)
     process.exit(1)
   })
+
+// --- Utilities ---
+function startSelfPing() {
+  if (String(process.env.DISABLE_SELF_PING).toLowerCase() === "true") return
+
+  const intervalMinutes = Number(process.env.PING_INTERVAL_MIN || 14)
+  const intervalMs = Math.max(5, isFinite(intervalMinutes) ? intervalMinutes : 14) * 60 * 1000
+
+  const baseUrl =
+    process.env.SELF_PING_URL ||
+    (process.env.RENDER_EXTERNAL_URL
+      ? `${process.env.RENDER_EXTERNAL_URL}`
+      : `http://localhost:${PORT}`)
+
+  const url = `${baseUrl.replace(/\/$/, "")}/healthz`
+
+  const ping = async () => {
+    try {
+      await fetch(url, { method: "GET" })
+      // console.log("Self ping OK:", url)
+    } catch (e) {
+      // console.warn("Self ping failed:", (e && e.message) || e)
+    }
+  }
+
+  // immediate ping, then schedule
+  ping()
+  const timer = setInterval(ping, intervalMs)
+
+  const cleanup = () => clearInterval(timer)
+  process.on("SIGINT", cleanup)
+  process.on("SIGTERM", cleanup)
+}

@@ -60,6 +60,11 @@ app.get("/healthz", (req, res) => {
   res.status(200).send("OK")
 })
 
+// API-scoped health for clients configured with /api baseURL
+app.get("/api/healthz", (req, res) => {
+  res.status(200).send("OK")
+})
+
 // Register REST routes
 app.use("/api/auth", authRoutes)
 app.use("/api/task", taskRoutes)
