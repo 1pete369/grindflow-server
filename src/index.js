@@ -32,18 +32,20 @@ app.use(express.json({ limit: "10mb" }))
 app.use(cookieParser())
 
 // CORS (for your Next.js frontend)
+const isProd = process.env.NODE_ENV === "production"
 const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .split(",")
   .map((o) => o.trim())
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow non-browser or same-origin requests with no Origin header
-      if (!origin) return callback(null, true)
-      if (allowedOrigins.includes(origin)) return callback(null, true)
-      return callback(new Error("Not allowed by CORS"))
-    },
+    origin: isProd
+      ? (origin, callback) => {
+          if (!origin) return callback(null, true)
+          if (allowedOrigins.includes(origin)) return callback(null, true)
+          return callback(new Error("Not allowed by CORS"))
+        }
+      : true, // In development, allow all origins for easier local testing
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

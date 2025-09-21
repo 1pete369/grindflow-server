@@ -12,7 +12,10 @@ import { Server as SocketIOServer } from "socket.io"
 dotenv.config()
 
 const PORT = process.env.PORT || 5001
-const CLIENT_ORIGIN = process.env.CORS_ORIGIN?.split(",")[0] || process.env.CLIENT_ORIGIN || "http://localhost:3000"
+const isProd = process.env.NODE_ENV === "production"
+const CLIENT_ORIGIN = isProd
+  ? process.env.CORS_ORIGIN?.split(",")[0] || process.env.CLIENT_ORIGIN || "http://localhost:3000"
+  : "*"
 
 // Create HTTP server from Express app
 const server = http.createServer(app)
@@ -46,6 +49,7 @@ connectDB()
 
 // --- Utilities ---
 function startSelfPing() {
+  if (!isProd) return // disable in development
   if (String(process.env.DISABLE_SELF_PING).toLowerCase() === "true") return
 
   const intervalMinutes = Number(process.env.PING_INTERVAL_MIN || 14)
