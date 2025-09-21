@@ -24,14 +24,26 @@ dotenv.config()
 
 const app = express()
 
+// Behind Render's proxy so secure cookies and IPs work as expected
+app.set("trust proxy", 1)
+
 // Body parser
 app.use(express.json({ limit: "10mb" }))
 app.use(cookieParser())
 
 // CORS (for your Next.js frontend)
+const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((o) => o.trim())
+
 app.use(
   cors({
-    origin: "http://localhost:3000", // Your Next.js frontend
+    origin: (origin, callback) => {
+      // Allow non-browser or same-origin requests with no Origin header
+      if (!origin) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      return callback(new Error("Not allowed by CORS"))
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -41,6 +53,11 @@ app.use(
 // Basic health check
 app.get("/", (req, res) => {
   res.send("Api is running")
+})
+
+// Additional health endpoint for Render health checks
+app.get("/healthz", (req, res) => {
+  res.status(200).send("OK")
 })
 
 // Register REST routes

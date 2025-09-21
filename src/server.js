@@ -11,6 +11,7 @@ import { Server as SocketIOServer } from "socket.io"
 dotenv.config()
 
 const PORT = process.env.PORT || 5001
+const CLIENT_ORIGIN = process.env.CORS_ORIGIN?.split(",")[0] || process.env.CLIENT_ORIGIN || "http://localhost:3000"
 
 // Create HTTP server from Express app
 const server = http.createServer(app)
@@ -18,7 +19,7 @@ const server = http.createServer(app)
 // Initialize Socket.IO on that server
 const io = new SocketIOServer(server, {
   cors: {
-    origin: "http://192.168.29.67:8081", // same as in index.js
+    origin: CLIENT_ORIGIN,
     methods: ["GET", "POST"],
     credentials: true,
   },
