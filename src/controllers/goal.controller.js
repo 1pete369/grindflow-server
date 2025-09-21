@@ -65,15 +65,57 @@ export const getGoalById = async (req, res) => {
 export const updateGoal = async (req, res) => {
   try {
     const updates = req.body
+    const goalId = req.params.id
+    const userId = req.user._id
+
+    // Get the current goal to check if it's being marked as completed
+    const currentGoal = await Goal.findOne({ _id: goalId, userId })
+    if (!currentGoal) return res.status(404).json({ error: "Goal not found" })
+
     const updated = await Goal.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
+      { _id: goalId, userId },
       updates,
       { new: true }
     )
-    if (!updated) return res.status(404).json({ error: "Goal not found" })
+
+    // If goal is being marked as completed, mark all linked habits as completed
+    if (updates.isCompleted === true && !currentGoal.isCompleted) {
+      const Habit = (await import("../models/habit.model.js")).default
+      
+      // Find all habits linked to this goal
+      const linkedHabits = await Habit.find({ 
+        linkedGoalId: goalId, 
+        userId 
+      })
+
+      // Mark all linked habits as completed
+      for (const habit of linkedHabits) {
+        // Add today's date to completedDates if not already there
+        const today = new Date().toISOString()
+        if (!habit.completedDates.some(date => 
+          new Date(date).toISOString().split('T')[0] === today.split('T')[0]
+        )) {
+          habit.completedDates.push(today)
+          habit.lastCompletedAt = new Date()
+          
+          // Recalculate streaks
+          const { calculateStreaks } = await import("../helpers/habit.helper.js")
+          const { streak, longestStreak } = calculateStreaks(
+            habit.completedDates.map(d => new Date(d).toISOString().split('T')[0]),
+            habit.frequency,
+            habit.days
+          )
+          habit.streak = streak
+          habit.longestStreak = longestStreak
+          
+          await habit.save()
+        }
+      }
+    }
 
     res.status(200).json(updated)
   } catch (err) {
+    console.error("Update goal error:", err)
     res
       .status(500)
       .json({ error: "Failed to update goal", details: err.message })

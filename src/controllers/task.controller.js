@@ -9,12 +9,19 @@ import Task from "../models/task.model.js"
 // 1. Create a new task
 export const createTask = async (req, res) => {
   try {
-    // req.body should include scheduledDate (ISO string)
-    const task = new Task({ ...req.body, userId: req.user._id })
+    // Convert scheduledDate string to Date object if it's a string
+    const taskData = { ...req.body, userId: req.user._id }
+    if (taskData.scheduledDate && typeof taskData.scheduledDate === 'string') {
+      // Convert YYYY-MM-DD string to Date object
+      taskData.scheduledDate = new Date(taskData.scheduledDate + 'T00:00:00.000Z')
+    }
+    
+    const task = new Task(taskData)
     const saved = await task.save()
     res.status(201).json(saved)
   } catch (err) {
-    res.status(500).json({ error: "Failed to create task", details: err })
+    console.error("Create task error:", err)
+    res.status(500).json({ error: "Failed to create task", details: err.message })
   }
 }
 

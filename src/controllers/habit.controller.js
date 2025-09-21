@@ -12,11 +12,11 @@ export const createHabit = async (req, res) => {
   try {
     const {
       title,
-      description,
+      description = "",
       frequency,
       days = [],
       startDate,
-      icon,
+      icon = "🎯",
       category,
       linkedGoalId = null,
     } = req.body
@@ -36,14 +36,12 @@ export const createHabit = async (req, res) => {
     // 🔁 Optionally link habit to goal if goalId is provided
     if (linkedGoalId) {
       await Goal.findByIdAndUpdate(linkedGoalId, {
-        $push: { linkedHabits: newHabit._id },
+        $addToSet: { linkedHabits: newHabit._id },
       })
 
       // ⬇️ Call progress recalculation
-      if (linkedGoalId) {
-        await updateGoalProgress(linkedGoalId)
-        await updateGoalMetrics(linkedGoalId) // ← recalc missedDays, streaks, etc.
-      }
+      await updateGoalProgress(linkedGoalId)
+      await updateGoalMetrics(linkedGoalId) // ← recalc missedDays, streaks, etc.
     }
 
     res.status(201).json(newHabit)
@@ -92,13 +90,42 @@ export const updateHabit = async (req, res) => {
     const updates = { ...req.body }
     delete updates.userId
 
+    // Get the current habit to check for linkedGoalId changes
+    const currentHabit = await Habit.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!currentHabit) return res.status(404).json({ error: "Habit not found" })
+
+    const oldLinkedGoalId = currentHabit.linkedGoalId
+    const newLinkedGoalId = updates.linkedGoalId
+
+    // Update the habit
     const updatedHabit = await Habit.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       updates,
       { new: true }
     )
 
-    if (!updatedHabit) return res.status(404).json({ error: "Habit not found" })
+    // Handle goal linking changes
+    if (oldLinkedGoalId !== newLinkedGoalId) {
+      // Remove habit from old goal if it was linked
+      if (oldLinkedGoalId) {
+        await Goal.findByIdAndUpdate(oldLinkedGoalId, {
+          $pull: { linkedHabits: req.params.id }
+        })
+        // Recalculate progress for old goal
+        await updateGoalProgress(oldLinkedGoalId)
+        await updateGoalMetrics(oldLinkedGoalId)
+      }
+
+      // Add habit to new goal if linking to a new goal
+      if (newLinkedGoalId) {
+        await Goal.findByIdAndUpdate(newLinkedGoalId, {
+          $addToSet: { linkedHabits: req.params.id }
+        })
+        // Recalculate progress for new goal
+        await updateGoalProgress(newLinkedGoalId)
+        await updateGoalMetrics(newLinkedGoalId)
+      }
+    }
 
     res.status(200).json(updatedHabit)
   } catch (err) {

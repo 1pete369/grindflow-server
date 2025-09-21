@@ -55,7 +55,7 @@ const habitSchema = new mongoose.Schema(
     },
     icon: {
       type: String,
-      required: true,
+      default: "🎯",
     },
     category: {
       type: String,

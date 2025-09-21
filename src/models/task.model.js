@@ -69,6 +69,12 @@ const taskSchema = new mongoose.Schema(
       required: true,
       default: () => new Date(),
     },
+    // --- NEW: color for the task card ---
+    color: {
+      type: String,
+      enum: ["blue", "green", "purple", "orange", "red", "pink", "indigo", "teal", "yellow", "gray"],
+      default: "blue",
+    },
   },
   { timestamps: true }
 )
