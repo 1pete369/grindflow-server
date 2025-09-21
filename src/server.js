@@ -2,6 +2,7 @@
 import http from "http"
 import mongoose from "mongoose"
 import dotenv from "dotenv"
+import cron from "node-cron"
 
 import app from "./index.js" // import the Express app
 import { registerSocket } from "./socketHandler.js"
@@ -67,10 +68,22 @@ function startSelfPing() {
     }
   }
 
-  // immediate ping, then schedule
+  // immediate ping
   ping()
-  const timer = setInterval(ping, intervalMs)
 
+  // Prefer cron if interval is a whole number of minutes and >= 1
+  if (Number.isFinite(intervalMinutes) && intervalMinutes >= 1) {
+    // Cron expression: every N minutes
+    const expr = `*/${Math.floor(intervalMinutes)} * * * *`
+    try {
+      cron.schedule(expr, ping, { scheduled: true })
+      return
+    } catch (_e) {
+      // fall back to setInterval
+    }
+  }
+
+  const timer = setInterval(ping, intervalMs)
   const cleanup = () => clearInterval(timer)
   process.on("SIGINT", cleanup)
   process.on("SIGTERM", cleanup)
