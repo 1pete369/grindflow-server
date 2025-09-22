@@ -24,54 +24,68 @@ dotenv.config()
 
 const app = express()
 
-// Behind Render's proxy so secure cookies and IPs work as expected
+// Behind Render's proxy so secure cookies & req.ip work
 app.set("trust proxy", 1)
 
-// Body parser
-app.use(express.json({ limit: "10mb" }))
-app.use(cookieParser())
-
-// CORS (for your Next.js frontend)
+// ---------- CORS ----------
 const isProd = process.env.NODE_ENV === "production"
-const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000,https://grindflowclub.vercel.app")
-  .split(",")
-  .map((o) => o.trim())
+
+// Build allowlist from env + sensible defaults
+const raw =
+  process.env.CORS_ORIGIN ||
+  "http://localhost:3000,https://grindflowclub.vercel.app"
+
+const allowlist = Array.from(
+  new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  )
+)
+
+// OPTIONAL: allow Vercel preview URLs for your project
+const vercelPreviewRegex = /^https:\/\/grindflowclub-[a-z0-9-]+\.vercel\.app$/i
 
 const corsOptions = {
-  origin: isProd
-    ? (origin, callback) => {
-        if (!origin) return callback(null, true)
-        if (allowedOrigins.includes(origin)) return callback(null, true)
-        return callback(new Error("Not allowed by CORS"))
-      }
-    : true, // In development, allow all origins for easier local testing
-  credentials: true,
+  origin(origin, cb) {
+    // Allow server-to-server, curl, health checks (no Origin header)
+    if (!origin) return cb(null, true)
+
+    if (allowlist.includes(origin)) return cb(null, true)
+    if (vercelPreviewRegex.test(origin)) return cb(null, true)
+
+    return cb(new Error(`Not allowed by CORS: ${origin}`))
+  },
+  credentials: true, // so browser can send/receive cookies
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  // Let cors package reflect requested headers to avoid preflight mismatch
+  allowedHeaders: ["Content-Type", "Authorization"],
   optionsSuccessStatus: 204,
 }
 
-app.use(cors(corsOptions))
-// Express 5 uses path-to-regexp v6 which does not accept "*" as a path.
-// Use a RegExp to match any path for preflight requests instead.
-app.options(/.*/, cors(corsOptions))
+// This header helps some clients when using credentials
+app.use((_, res, next) => {
+  res.header("Access-Control-Allow-Credentials", "true")
+  next()
+})
 
-// Basic health check
-app.get("/", (req, res) => {
+// CORS MUST be before parsers & routes
+app.use(cors(isProd ? corsOptions : { ...corsOptions, origin: true }))
+// Express 5: use RegExp to handle preflight on any path
+app.options(/.*/, cors(isProd ? corsOptions : { ...corsOptions, origin: true }))
+
+// ---------- Parsers ----------
+app.use(express.json({ limit: "10mb" }))
+app.use(cookieParser())
+
+// ---------- Health ----------
+app.get("/", (_req, res) => {
   res.send("Api is running")
 })
+app.get("/healthz", (_req, res) => res.status(200).send("OK"))
+app.get("/api/healthz", (_req, res) => res.status(200).send("OK"))
 
-// Additional health endpoint for Render health checks
-app.get("/healthz", (req, res) => {
-  res.status(200).send("OK")
-})
-
-// API-scoped health for clients configured with /api baseURL
-app.get("/api/healthz", (req, res) => {
-  res.status(200).send("OK")
-})
-
-// Register REST routes
+// ---------- Routes ----------
 app.use("/api/auth", authRoutes)
 app.use("/api/task", taskRoutes)
 app.use("/api/goal", goalRoutes)
