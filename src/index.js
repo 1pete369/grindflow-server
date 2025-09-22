@@ -52,7 +52,9 @@ const corsOptions = {
 }
 
 app.use(cors(corsOptions))
-app.options("*", cors(corsOptions))
+// Express 5 uses path-to-regexp v6 which does not accept "*" as a path.
+// Use a RegExp to match any path for preflight requests instead.
+app.options(/.*/, cors(corsOptions))
 
 // Basic health check
 app.get("/", (req, res) => {
