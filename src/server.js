@@ -21,6 +21,7 @@ const CLIENT_ORIGIN = isProd
 const server = http.createServer(app)
 
 // Initialize Socket.IO on that server
+
 const io = new SocketIOServer(server, {
   cors: {
     origin: CLIENT_ORIGIN,
