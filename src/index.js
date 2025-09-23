@@ -29,7 +29,7 @@ app.set("trust proxy", 1);
 // -------------------- Allowlist --------------------
 const raw =
   process.env.CORS_ORIGIN ||
-  "http://localhost:3000,https://grindflowclub.vercel.app";
+  "https://grindflowclub.vercel.app";
 const ALLOWLIST = Array.from(new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)));
 const vercelPreviewRegex = /^https:\/\/grindflowclub-[a-z0-9-]+\.vercel\.app$/i;
 
@@ -39,7 +39,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   res.setHeader("Vary", "Origin");
   if (origin && (ALLOWLIST.includes(origin) || vercelPreviewRegex.test(origin))) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Origin", "https://grindflowclub.vercel.app");
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   next();
