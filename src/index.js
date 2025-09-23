@@ -1,7 +1,6 @@
 // index.js
 import express from "express";
 import cookieParser from "cookie-parser";
-import cors from "cors";
 import dotenv from "dotenv";
 
 import authRoutes from "./routes/auth.route.js";
@@ -25,40 +24,28 @@ dotenv.config();
 const app = express();
 
 // -------------------- Proxy --------------------
-app.set("trust proxy", 1); // Render proxy: correct IP & secure cookies
+app.set("trust proxy", 1);
 
-// -------------------- CORS --------------------
-const isProd = process.env.NODE_ENV === "production";
-
-// Build allowlist from env or use sensible defaults
+// -------------------- Allowlist --------------------
 const raw =
   process.env.CORS_ORIGIN ||
   "http://localhost:3000,https://grindflowclub.vercel.app";
-
-const allowlist = Array.from(
-  new Set(
-    raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-  )
-);
-
-// Also allow Vercel preview URLs like https://grindflowclub-abc123.vercel.app
+const ALLOWLIST = Array.from(new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)));
 const vercelPreviewRegex = /^https:\/\/grindflowclub-[a-z0-9-]+\.vercel\.app$/i;
 
-// -------------- HOT CORS SHIM (reflect ACAO/ACC everywhere) --------------
+// -------------------- CORS SHIM (no cors package) --------------------
+// 1) Reflect ACAO/ACC on EVERY response for allowed origins
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   res.setHeader("Vary", "Origin");
-  if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
+  if (origin && (ALLOWLIST.includes(origin) || vercelPreviewRegex.test(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   next();
 });
 
-// Short-circuit ALL preflights with OK + proper headers
+// 2) End ALL preflights early with 204 + proper headers
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -71,27 +58,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-// -------------- END HOT CORS SHIM ---------------------------------------
-
-// Keep cors() for good measure (will not hurt)
-const corsOptionsDelegate = (origin, cb) => {
-  if (!origin) return cb(null, true);
-  if (allowlist.includes(origin)) return cb(null, true);
-  if (vercelPreviewRegex.test(origin)) return cb(null, true);
-  const err = new Error(`Not allowed by CORS: ${origin}`);
-  err.name = "CorsError";
-  return cb(err);
-};
-const corsOptions = {
-  origin: isProd ? corsOptionsDelegate : true, // dev: allow all
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-  optionsSuccessStatus: 204,
-  maxAge: 86400,
-};
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
 
 // -------------------- Parsers --------------------
 app.use(express.json({ limit: "10mb" }));
@@ -101,11 +67,9 @@ app.use(cookieParser());
 app.get("/", (_req, res) => {
   res.status(200).send("API is running");
 });
-
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ ok: true, uptime: process.uptime() });
 });
-
 app.get("/api/healthz", (_req, res) => {
   res.status(200).send("OK");
 });
@@ -130,30 +94,25 @@ app.use("/api/folder", folderRouter);
 // -------------------- 404 --------------------
 app.use((req, res) => {
   const origin = req.headers.origin;
-  if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
+  if (origin && (ALLOWLIST.includes(origin) || vercelPreviewRegex.test(origin))) {
     res.set("Access-Control-Allow-Origin", origin);
     res.set("Access-Control-Allow-Credentials", "true");
   }
   res.status(404).json({ error: "Not Found", path: req.originalUrl });
 });
 
-// -------------------- Global Error Handler --------------------
+// -------------------- Error Handler --------------------
 app.use((err, req, res, _next) => {
-  const status = err.name === "CorsError" ? 403 : err.status || 500;
-
   const origin = req.headers.origin;
-  if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
+  if (origin && (ALLOWLIST.includes(origin) || vercelPreviewRegex.test(origin))) {
     res.set("Access-Control-Allow-Origin", origin);
     res.set("Access-Control-Allow-Credentials", "true");
   }
-
-  const payload = {
+  const status = err.status || 500;
+  res.status(status).json({
     error: err.name || "Error",
-    message:
-      isProd && err.name !== "CorsError" ? "Internal Server Error" : err.message,
-  };
-
-  res.status(status).json(payload);
+    message: process.env.NODE_ENV === "production" ? "Internal Server Error" : err.message,
+  });
 });
 
 export default app;
