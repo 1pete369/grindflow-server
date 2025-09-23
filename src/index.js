@@ -31,7 +31,6 @@ app.set("trust proxy", 1); // Render proxy: correct IP & secure cookies
 const isProd = process.env.NODE_ENV === "production";
 
 // Build allowlist from env or use sensible defaults
-// CORS_ORIGIN can be comma-separated list
 const raw =
   process.env.CORS_ORIGIN ||
   "http://localhost:3000,https://grindflowclub.vercel.app";
@@ -48,24 +47,41 @@ const allowlist = Array.from(
 // Also allow Vercel preview URLs like https://grindflowclub-abc123.vercel.app
 const vercelPreviewRegex = /^https:\/\/grindflowclub-[a-z0-9-]+\.vercel\.app$/i;
 
-// Always set Vary so caches don't mix different origins
+// -------------- HOT CORS SHIM (reflect ACAO/ACC everywhere) --------------
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
   res.setHeader("Vary", "Origin");
+  if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
   next();
 });
 
-const corsOptionsDelegate = (origin, cb) => {
-  // Allow server-to-server, curl/Postman, health checks (no Origin header)
-  if (!origin) return cb(null, true);
+// Short-circuit ALL preflights with OK + proper headers
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] ||
+        "Content-Type, Authorization, X-Requested-With, Accept"
+    );
+    return res.status(204).end();
+  }
+  next();
+});
+// -------------- END HOT CORS SHIM ---------------------------------------
 
+// Keep cors() for good measure (will not hurt)
+const corsOptionsDelegate = (origin, cb) => {
+  if (!origin) return cb(null, true);
   if (allowlist.includes(origin)) return cb(null, true);
   if (vercelPreviewRegex.test(origin)) return cb(null, true);
-
   const err = new Error(`Not allowed by CORS: ${origin}`);
   err.name = "CorsError";
   return cb(err);
 };
-
 const corsOptions = {
   origin: isProd ? corsOptionsDelegate : true, // dev: allow all
   credentials: true,
@@ -74,16 +90,8 @@ const corsOptions = {
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
-
-// IMPORTANT: CORS must be before parsers & routes
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions)); // explicit preflight for any path
-
-// Some clients require this header explicitly for credentialed requests
-app.use((_, res, next) => {
-  res.header("Access-Control-Allow-Credentials", "true");
-  next();
-});
+app.options(/.*/, cors(corsOptions));
 
 // -------------------- Parsers --------------------
 app.use(express.json({ limit: "10mb" }));
@@ -120,33 +128,29 @@ app.use("/api/calendar", calendarRoutes);
 app.use("/api/folder", folderRouter);
 
 // -------------------- 404 --------------------
-app.use((req, res, next) => {
-  // Keep CORS headers on 404s as well
-  res.set("Access-Control-Allow-Credentials", "true");
-  // If the request had an Origin and it's allowed, reflect it
+app.use((req, res) => {
   const origin = req.headers.origin;
   if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
     res.set("Access-Control-Allow-Origin", origin);
+    res.set("Access-Control-Allow-Credentials", "true");
   }
   res.status(404).json({ error: "Not Found", path: req.originalUrl });
 });
 
 // -------------------- Global Error Handler --------------------
-// Ensures CORS headers are present even on errors (including CORS errors)
 app.use((err, req, res, _next) => {
   const status = err.name === "CorsError" ? 403 : err.status || 500;
 
-  // Preserve CORS headers on error
-  res.set("Access-Control-Allow-Credentials", "true");
   const origin = req.headers.origin;
   if (origin && (allowlist.includes(origin) || vercelPreviewRegex.test(origin))) {
     res.set("Access-Control-Allow-Origin", origin);
+    res.set("Access-Control-Allow-Credentials", "true");
   }
 
-  // Basic error payload (don’t leak internals in prod)
   const payload = {
     error: err.name || "Error",
-    message: isProd ? (err.name === "CorsError" ? err.message : "Internal Server Error") : err.message,
+    message:
+      isProd && err.name !== "CorsError" ? "Internal Server Error" : err.message,
   };
 
   res.status(status).json(payload);
