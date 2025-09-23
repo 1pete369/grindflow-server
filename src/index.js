@@ -82,7 +82,11 @@ app.use(cookieParser())
 app.get("/", (_req, res) => {
   res.send("Api is running")
 })
-app.get("/healthz", (_req, res) => res.status(200).send("OK"))
+// server: index.js (top-level after app init, before routes)
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ ok: true, uptime: process.uptime() });
+});
+
 app.get("/api/healthz", (_req, res) => res.status(200).send("OK"))
 
 // ---------- Routes ----------
