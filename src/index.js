@@ -39,7 +39,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   res.setHeader("Vary", "Origin");
   if (origin && (ALLOWLIST.includes(origin) || vercelPreviewRegex.test(origin))) {
-    res.setHeader("Access-Control-Allow-Origin", "https://grindflowclub.vercel.app");
+    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   next();
